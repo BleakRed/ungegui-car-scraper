@@ -16,7 +16,7 @@ Web scraper for [unegui.mn](https://www.unegui.mn/avto-mashin/-avtomashin-zarna/
 | Layer     | Tech         |
 |-----------|-------------|
 | Backend   | Python, FastAPI, SQLAlchemy |
-| Database  | PostgreSQL (or SQLite for dev) |
+| Database  | SQLite |
 | Scraper   | requests, BeautifulSoup |
 | Frontend  | React (or Next.js) |
 | Scheduler | APScheduler / cron |
@@ -41,34 +41,43 @@ ungegui-car-scraper/
 ├── frontend/
 │   ├── src/
 │   │   ├── components/
-│   │   │   ├── CarList.jsx
 │   │   │   ├── CarCard.jsx
 │   │   │   ├── SearchFilters.jsx
-│   │   │   └── CarDetail.jsx
+│   │   │   └── Pagination.jsx
 │   │   ├── pages/
-│   │   └── api/
+│   │   │   ├── HomePage.jsx
+│   │   │   └── CarDetailPage.jsx
+│   │   ├── api.js
+│   │   └── App.jsx
 │   ├── package.json
 │   └── vite.config.js
 ├── docker-compose.yml
+├── Makefile
 └── README.md
 ```
 
 ## Setup
 
 ```bash
-# Backend
+# Quick start with Make
+make install    # install all dependencies
+make backend    # start backend on :8000
+make frontend   # start frontend on :5173
+
+# Or with Docker
+make docker-up
+
+# Or manually
 cd backend
-python -m venv venv
-source venv/bin/activate
+python -m venv venv && source venv/bin/activate
 pip install -r requirements.txt
-alembic upgrade head
 uvicorn app.main:app --reload
 
-# Frontend
 cd frontend
-npm install
-npm run dev
+npm install && npm run dev
 ```
+
+The backend auto-scrapes on first startup. Run `make scrape` to scrape manually.
 
 ## API Endpoints
 
@@ -76,9 +85,9 @@ npm run dev
 |--------|----------------------|---------------------------|
 | GET    | `/api/cars`          | List all cars (paginated) |
 | GET    | `/api/cars/{id}`     | Car detail                |
-| GET    | `/api/search`        | Search/filter cars        |
-| GET    | `/api/cars/similar/{id}` | Similar cars         |
+| GET    | `/api/cars/{id}/similar` | Similar cars          |
 | POST   | `/api/scrape`        | Trigger manual scrape     |
+| GET    | `/api/stats`         | Scraper statistics        |
 
 ### Query Parameters for Search
 
