@@ -1,0 +1,32 @@
+{
+  "schema_version": 1,
+  "bundle_id": "ctx_25f81d8aa533425e664dce5e",
+  "workspace": "/home/bleakred/Projects/ungegui-car-scraper",
+  "created_at": "2026-07-24T02:57:38Z",
+  "agent": "ATHENA CODE",
+  "task": "",
+  "curated_context": "",
+  "sources": [
+    {
+      "kind": "athena_code_memory",
+      "path": null,
+      "content": "",
+      "sha256": null,
+      "truncated": false
+    },
+    {
+      "kind": "session_recall",
+      "path": "/home/bleakred/Projects/ungegui-car-scraper/.context-workspace/hermes/session-recall.md",
+      "content": "",
+      "sha256": null,
+      "truncated": false
+    }
+  ],
+  "warnings": [
+    "No supported project instruction file was found.",
+    "No Athena Code memory was available.",
+    "No Athena session recall cache was available."
+  ],
+  "bundle_path": "/home/bleakred/Projects/ungegui-car-scraper/.context-workspace/context/ctx_25f81d8aa533425e664dce5e/bundle.json",
+  "context_path": "/home/bleakred/Projects/ungegui-car-scraper/.context-workspace/context/ctx_25f81d8aa533425e664dce5e/context.md"
+}
