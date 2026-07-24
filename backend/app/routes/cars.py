@@ -95,6 +95,76 @@ def list_cars(
     )
 
 
+@router.get("/api/cars/export")
+def export_cars(
+    page: int = Query(1, ge=1),
+    limit: int = Query(20, ge=1, le=100),
+    make: Optional[str] = None,
+    model: Optional[str] = None,
+    year_from: Optional[int] = None,
+    year_to: Optional[int] = None,
+    price_min: Optional[int] = None,
+    price_max: Optional[int] = None,
+    fuel: Optional[str] = None,
+    transmission: Optional[str] = None,
+    body_type: Optional[str] = None,
+    link_to: str = Query("unegui", description="'unegui' or 'frontend'"),
+    db: Session = Depends(get_db),
+):
+    """
+    External API for friend's site: returns a simplified list of cars
+    with make, model, price, and a link.
+    """
+    query = db.query(Car).filter(Car.is_active == True)
+
+    if make:
+        query = query.filter(Car.make.ilike(f"%{make}%"))
+    if model:
+        query = query.filter(Car.model.ilike(f"%{model}%"))
+    if year_from:
+        query = query.filter(Car.year >= year_from)
+    if year_to:
+        query = query.filter(Car.year <= year_to)
+    if price_min:
+        query = query.filter(Car.price_mnt >= price_min)
+    if price_max:
+        query = query.filter(Car.price_mnt <= price_max)
+    if fuel:
+        query = query.filter(Car.fuel_type.ilike(f"%{fuel}%"))
+    if transmission:
+        query = query.filter(Car.transmission.ilike(f"%{transmission}%"))
+    if body_type:
+        query = query.filter(Car.body_type.ilike(f"%{body_type}%"))
+
+    total = query.count()
+    pages = math.ceil(total / limit) if total > 0 else 1
+    offset = (page - 1) * limit
+    cars = query.order_by(Car.created_at.desc()).offset(offset).limit(limit).all()
+
+    results = []
+    for c in cars:
+        if link_to == "frontend":
+            link = f"{FRONTEND_URL}/car/{c.id}"
+        else:
+            link = c.source_url or ""
+
+        results.append({
+            "make": c.make,
+            "model": c.model,
+            "year": c.year,
+            "price": c.price_display or (f"{c.price_mnt:,} ₮" if c.price_mnt else None),
+            "link": link,
+        })
+
+    return {
+        "cars": results,
+        "total": total,
+        "page": page,
+        "limit": limit,
+        "pages": pages,
+    }
+
+
 @router.get("/api/cars/{car_id}", response_model=CarResponse)
 def get_car(car_id: int, db: Session = Depends(get_db)):
     car = db.query(Car).filter(Car.id == car_id).first()
