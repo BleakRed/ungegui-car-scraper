@@ -91,18 +91,26 @@ The backend auto-scrapes on first startup. Run `make scrape` to scrape manually.
 
 ### Query Parameters for Search
 
-| Param        | Type   | Example              |
-|-------------|--------|----------------------|
-| `make`      | string | `Toyota`             |
-| `model`     | string | `Camry`              |
-| `year_from` | int    | `2015`               |
-| `year_to`   | int    | `2024`               |
-| `price_min` | int    | `5000000`            |
-| `price_max` | int    | `50000000`           |
-| `fuel`      | string | `Benzin`             |
-| `transmission` | string | `Automat`         |
-| `page`      | int    | `1`                  |
-| `limit`     | int    | `20`                 |
+| Param | Type | Example |
+|-------|------|---------|
+| `make` | string | `Toyota` |
+| `model` | string | `Camry` |
+| `year_from` | int | `2015` |
+| `year_to` | int | `2024` |
+| `price_min` | int | `5000000` |
+| `price_max` | int | `50000000` |
+| `fuel` | string | `Бензин` |
+| `transmission` | string | `Автомат` |
+| `body_type` | string | `Суудлын тэрэг` |
+| `color` | string | `Хар` |
+| `steering` | string | `Зүүн` |
+| `drive_type` | string | `FWD` |
+| `condition` | string | `Дугаартай нь зарна` |
+| `doors` | int | `5` |
+| `leasing` | string | `Лизинггүй` |
+| `location` | string | `Улаанбаатар` |
+| `page` | int | `1` |
+| `limit` | int | `20` |
 
 ## Data Model
 
@@ -135,3 +143,31 @@ class Car:
 ## Scraping Schedule
 
 The backend runs the scraper every 6 hours by default. Configure via `SCRAPE_INTERVAL_HOURS` env var. A manual scrape can also be triggered via `POST /api/scrape`.
+
+## Environment Variables
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `DATABASE_URL` | `sqlite:///./cars.db` | Database connection string |
+| `SCRAPE_INTERVAL_HOURS` | `6` | How often to auto-scrape |
+| `AUTO_SCRAPE` | `true` | Run scrape on startup |
+| `MAX_DETAIL_PAGES` | `20` | Max detail pages to scrape for trait fields per batch |
+| `FRONTEND_URL` | `http://localhost:5173` | Frontend URL for redirect links |
+
+## External Redirect API
+
+Other sites can link to your car listings:
+
+```
+GET /api/redirect?make=Toyota&model=Camry&year_from=2018
+```
+
+Returns a prefilled frontend URL with filters:
+```json
+{
+  "redirect_url": "http://localhost:5173/?make=Toyota&model=Camry&year_from=2018",
+  "params": { "make": "Toyota", "model": "Camry", "year_from": 2018 }
+}
+```
+
+The frontend reads URL query params on load, so users land with filters pre-applied.
