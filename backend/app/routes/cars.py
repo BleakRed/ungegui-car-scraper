@@ -168,7 +168,6 @@ def get_stats(db: Session = Depends(get_db)):
 
 
 FRONTEND_URL = os.getenv("FRONTEND_URL", "http://localhost:5173")
-FRIEND_FRONTEND_URL = os.getenv("FRIEND_FRONTEND_URL", "")
 
 
 def _build_query_string(
@@ -214,14 +213,10 @@ def get_redirect_link(
     doors: Optional[int] = Query(None),
     leasing: Optional[str] = Query(None),
     location: Optional[str] = Query(None),
-    site: Optional[str] = Query(None, description="'mine' or 'friend'"),
 ):
     """
     External API: another site calls this with make/model (or any filters)
     and gets back a prefilled frontend URL they can send users to.
-
-    Use site=mine or site=friend to pick which frontend URL to return.
-    If omitted, returns both.
     """
     query_string = _build_query_string(
         make, model, year_from, year_to, price_min, price_max,
@@ -230,9 +225,8 @@ def get_redirect_link(
     )
 
     if query_string:
-        base = FRIEND_FRONTEND_URL if site == "friend" and FRIEND_FRONTEND_URL else FRONTEND_URL
-        redirect = f"{base}/?{query_string}"
+        redirect = f"{FRONTEND_URL}/?{query_string}"
     else:
-        redirect = FRIEND_FRONTEND_URL if site == "friend" and FRIEND_FRONTEND_URL else FRONTEND_URL
+        redirect = FRONTEND_URL
 
     return {"redirect_url": redirect}

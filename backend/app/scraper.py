@@ -254,7 +254,14 @@ def upsert_cars(db: Session, listings: list[dict]) -> tuple[int, int]:
     new_count = 0
     updated_count = 0
 
+    seen_ids = set()
+    unique_listings = []
     for data in listings:
+        if data["source_id"] not in seen_ids:
+            seen_ids.add(data["source_id"])
+            unique_listings.append(data)
+
+    for data in unique_listings:
         existing = db.query(Car).filter(Car.source_id == data["source_id"]).first()
         if existing:
             for key, value in data.items():

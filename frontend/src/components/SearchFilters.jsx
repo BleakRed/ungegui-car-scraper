@@ -114,7 +114,7 @@ export default function SearchFilters({ filters, onChange, onReset }) {
           </div>
         </div>
 
-        <div className="filter-group">
+        <div className="filter-group" hidden>
           <label className="filter-label">Үнэ (₮)</label>
           <div className="filter-row">
             <input
