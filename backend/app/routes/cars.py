@@ -168,6 +168,32 @@ def get_stats(db: Session = Depends(get_db)):
 
 
 FRONTEND_URL = os.getenv("FRONTEND_URL", "http://localhost:5173")
+FRIEND_FRONTEND_URL = os.getenv("FRIEND_FRONTEND_URL", "")
+
+
+def _build_query_string(
+    make, model, year_from, year_to, price_min, price_max,
+    fuel, transmission, body_type, color, steering,
+    drive_type, condition, doors, leasing, location,
+):
+    params = []
+    if make: params.append(f"make={make}")
+    if model: params.append(f"model={model}")
+    if year_from: params.append(f"year_from={year_from}")
+    if year_to: params.append(f"year_to={year_to}")
+    if price_min: params.append(f"price_min={price_min}")
+    if price_max: params.append(f"price_max={price_max}")
+    if fuel: params.append(f"fuel={fuel}")
+    if transmission: params.append(f"transmission={transmission}")
+    if body_type: params.append(f"body_type={body_type}")
+    if color: params.append(f"color={color}")
+    if steering: params.append(f"steering={steering}")
+    if drive_type: params.append(f"drive_type={drive_type}")
+    if condition: params.append(f"condition={condition}")
+    if doors: params.append(f"doors={doors}")
+    if leasing: params.append(f"leasing={leasing}")
+    if location: params.append(f"location={location}")
+    return "&".join(params)
 
 
 @router.get("/api/redirect")
@@ -188,66 +214,25 @@ def get_redirect_link(
     doors: Optional[int] = Query(None),
     leasing: Optional[str] = Query(None),
     location: Optional[str] = Query(None),
+    site: Optional[str] = Query(None, description="'mine' or 'friend'"),
 ):
     """
     External API: another site calls this with make/model (or any filters)
     and gets back a prefilled frontend URL they can send users to.
+
+    Use site=mine or site=friend to pick which frontend URL to return.
+    If omitted, returns both.
     """
-    params = []
-    if make:
-        params.append(f"make={make}")
-    if model:
-        params.append(f"model={model}")
-    if year_from:
-        params.append(f"year_from={year_from}")
-    if year_to:
-        params.append(f"year_to={year_to}")
-    if price_min:
-        params.append(f"price_min={price_min}")
-    if price_max:
-        params.append(f"price_max={price_max}")
-    if fuel:
-        params.append(f"fuel={fuel}")
-    if transmission:
-        params.append(f"transmission={transmission}")
-    if body_type:
-        params.append(f"body_type={body_type}")
-    if color:
-        params.append(f"color={color}")
-    if steering:
-        params.append(f"steering={steering}")
-    if drive_type:
-        params.append(f"drive_type={drive_type}")
-    if condition:
-        params.append(f"condition={condition}")
-    if doors:
-        params.append(f"doors={doors}")
-    if leasing:
-        params.append(f"leasing={leasing}")
-    if location:
-        params.append(f"location={location}")
+    query_string = _build_query_string(
+        make, model, year_from, year_to, price_min, price_max,
+        fuel, transmission, body_type, color, steering,
+        drive_type, condition, doors, leasing, location,
+    )
 
-    query_string = "&".join(params)
-    url = f"{FRONTEND_URL}/?{query_string}" if query_string else FRONTEND_URL
+    if query_string:
+        base = FRIEND_FRONTEND_URL if site == "friend" and FRIEND_FRONTEND_URL else FRONTEND_URL
+        redirect = f"{base}/?{query_string}"
+    else:
+        redirect = FRIEND_FRONTEND_URL if site == "friend" and FRIEND_FRONTEND_URL else FRONTEND_URL
 
-    return {
-        "redirect_url": url,
-        "params": {
-            "make": make,
-            "model": model,
-            "year_from": year_from,
-            "year_to": year_to,
-            "price_min": price_min,
-            "price_max": price_max,
-            "fuel": fuel,
-            "transmission": transmission,
-            "body_type": body_type,
-            "color": color,
-            "steering": steering,
-            "drive_type": drive_type,
-            "condition": condition,
-            "doors": doors,
-            "leasing": leasing,
-            "location": location,
-        },
-    }
+    return {"redirect_url": redirect}
