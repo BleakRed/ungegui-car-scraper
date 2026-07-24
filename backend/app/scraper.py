@@ -293,7 +293,6 @@ def run_scraper(max_pages: Optional[int] = None) -> dict:
     """Run the full scraping process. Returns stats dict."""
     db = SessionLocal()
     all_listings = []
-    total_pages = 1
 
     try:
         listings, total_pages = scrape_page(1)
@@ -301,37 +300,53 @@ def run_scraper(max_pages: Optional[int] = None) -> dict:
         logger.info(f"Page 1: {len(listings)} listings, {total_pages} total pages")
 
         pages_to_scrape = min(total_pages, max_pages) if max_pages else total_pages
-        for page in range(2, pages_to_scrape + 1):
-            time.sleep(1.5)
-            try:
-                listings, _ = scrape_page(page)
-                all_listings.extend(listings)
-                logger.info(f"Page {page}: {len(listings)} listings")
-            except Exception as e:
-                logger.error(f"Error scraping page {page}: {e}")
-                continue
+
+        if pages_to_scrape > 1:
+            def scrape_page_with_delay(page):
+                time.sleep(0.5)
+                try:
+                    result = scrape_page(page)
+                    logger.info(f"Page {page}: {len(result[0])} listings")
+                    return result[0]
+                except Exception as e:
+                    logger.error(f"Error scraping page {page}: {e}")
+                    return []
+
+            with ThreadPoolExecutor(max_workers=10) as pool:
+                futures = {pool.submit(scrape_page_with_delay, p): p for p in range(2, pages_to_scrape + 1)}
+                for future in as_completed(futures):
+                    try:
+                        page_listings = future.result()
+                        all_listings.extend(page_listings)
+                    except Exception:
+                        pass
 
         active_ids = [l["source_id"] for l in all_listings]
         new_count, updated_count = upsert_cars(db, all_listings)
-        mark_inactive(db, active_ids)
+
+        is_full_scrape = max_pages is None or pages_to_scrape >= total_pages
+        if is_full_scrape:
+            mark_inactive(db, active_ids)
+        else:
+            logger.info("Partial scrape, skipping inactive marking")
 
         logger.info("Scraping detail pages for trait fields...")
 
         detail_urls = [(l["source_id"], l["source_url"]) for l in all_listings if l.get("source_url")]
-        max_detail = int(os.getenv("MAX_DETAIL_PAGES", "20"))
-        detail_urls = detail_urls[:max_detail]
-        logger.info(f"Scraping traits from {len(detail_urls)} detail pages (max {max_detail})")
+        max_detail = int(os.getenv("MAX_DETAIL_PAGES", "0"))
+        if max_detail > 0:
+            detail_urls = detail_urls[:max_detail]
+        logger.info(f"Scraping traits from {len(detail_urls)} detail pages")
 
         detail_count = 0
         failed = 0
 
         def fetch_detail(item):
             source_id, url = item
-            time.sleep(0.3)
             traits = scrape_traits_from_detail(url)
             return source_id, traits
 
-        with ThreadPoolExecutor(max_workers=5) as pool:
+        with ThreadPoolExecutor(max_workers=10) as pool:
             futures = {pool.submit(fetch_detail, item): item for item in detail_urls}
             for i, future in enumerate(as_completed(futures), 1):
                 try:
@@ -343,7 +358,7 @@ def run_scraper(max_pages: Optional[int] = None) -> dict:
                                 if value is not None:
                                     setattr(car, key, value)
                             detail_count += 1
-                    if i % 10 == 0:
+                    if i % 20 == 0:
                         logger.info(f"  Detail progress: {i}/{len(detail_urls)}")
                 except Exception as e:
                     failed += 1

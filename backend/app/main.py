@@ -23,12 +23,23 @@ async def lifespan(app: FastAPI):
     Base.metadata.create_all(bind=engine)
 
     if os.getenv("AUTO_SCRAPE", "true").lower() == "true":
+        from .database import SessionLocal
+        from .models import Car
+        db = SessionLocal()
         try:
-            from .scraper import run_scraper
-            logger.info("Running initial scrape...")
-            run_scraper(max_pages=2)
-        except Exception as e:
-            logger.error(f"Initial scrape failed: {e}")
+            existing_count = db.query(Car).count()
+        finally:
+            db.close()
+
+        if existing_count > 0:
+            logger.info(f"DB already has {existing_count} cars, skipping initial scrape")
+        else:
+            try:
+                from .scraper import run_scraper
+                logger.info("DB empty, running initial full scrape...")
+                run_scraper()
+            except Exception as e:
+                logger.error(f"Initial scrape failed: {e}")
 
     start_scheduler()
     yield
