@@ -43,7 +43,6 @@ TRAIT_MAP = {
 
 
 def parse_price(price_text: str) -> Optional[int]:
-    """Parse price text like '39.8 сая ₮' to integer MNT."""
     if not price_text:
         return None
     price_text = price_text.strip().replace("\xa0", " ").replace("₮", "").strip()
@@ -66,7 +65,6 @@ def parse_price(price_text: str) -> Optional[int]:
 
 
 def parse_mileage(text: str) -> Optional[int]:
-    """Parse mileage text like '157000 км' to integer."""
     if not text:
         return None
     match = re.search(r"([\d\s]+)\s*км", text)
@@ -76,7 +74,6 @@ def parse_mileage(text: str) -> Optional[int]:
 
 
 def parse_engine_volume(text: str) -> Optional[float]:
-    """Parse engine volume like '1.8 л' to float."""
     if not text:
         return None
     match = re.search(r"([\d.]+)\s*л", text)
@@ -86,7 +83,6 @@ def parse_engine_volume(text: str) -> Optional[float]:
 
 
 def parse_title(title: str) -> tuple[Optional[str], Optional[str], Optional[int]]:
-    """Parse title like 'Toyota Prius 41, 2019/2026' to (make, model, year)."""
     if not title:
         return None, None, None
     title = title.strip()
@@ -117,7 +113,6 @@ def parse_import_year(text: str) -> Optional[int]:
 
 
 def scrape_page(page: int = 1) -> tuple[list[dict], int]:
-    """Scrape a single page of listings. Returns (listings, total_pages)."""
     url = LISTING_URL if page == 1 else f"{LISTING_URL}?page={page}"
     logger.info(f"Scraping page {page}: {url}")
 
@@ -193,7 +188,6 @@ def scrape_page(page: int = 1) -> tuple[list[dict], int]:
 
 
 def scrape_traits_from_detail(url: str) -> dict:
-    """Scrape trait fields from a car detail page."""
     try:
         resp = requests.get(url, headers=HEADERS, timeout=10)
         resp.raise_for_status()
@@ -249,7 +243,6 @@ def scrape_traits_from_detail(url: str) -> dict:
 
 
 def upsert_cars(db: Session, listings: list[dict]) -> tuple[int, int]:
-    """Upsert car listings into the database. Returns (new_count, updated_count)."""
     now = datetime.now(timezone.utc)
     new_count = 0
     updated_count = 0
@@ -280,7 +273,6 @@ def upsert_cars(db: Session, listings: list[dict]) -> tuple[int, int]:
 
 
 def mark_inactive(db: Session, active_source_ids: list[str]):
-    """Mark listings not seen in current scrape as inactive."""
     if active_source_ids:
         db.query(Car).filter(
             Car.source_id.notin_(active_source_ids),
@@ -290,14 +282,22 @@ def mark_inactive(db: Session, active_source_ids: list[str]):
 
 
 def run_scraper(max_pages: Optional[int] = None) -> dict:
-    """Run the full scraping process. Returns stats dict."""
     db = SessionLocal()
-    all_listings = []
+    active_ids = []
+    detail_items = []
+    total_count = 0
+    new_count = 0
+    updated_count = 0
 
     try:
         listings, total_pages = scrape_page(1)
-        all_listings.extend(listings)
-        logger.info(f"Page 1: {len(listings)} listings, {total_pages} total pages")
+        active_ids.extend(l["source_id"] for l in listings)
+        detail_items.extend((l["source_id"], l["source_url"]) for l in listings if l.get("source_url"))
+        n, u = upsert_cars(db, listings)
+        new_count += n
+        updated_count += u
+        total_count += len(listings)
+        logger.info(f"Page 1: {len(listings)} listings ({n} new, {u} updated), {total_pages} total pages")
 
         pages_to_scrape = min(total_pages, max_pages) if max_pages else total_pages
 
@@ -317,12 +317,15 @@ def run_scraper(max_pages: Optional[int] = None) -> dict:
                 for future in as_completed(futures):
                     try:
                         page_listings = future.result()
-                        all_listings.extend(page_listings)
+                        if page_listings:
+                            n, u = upsert_cars(db, page_listings)
+                            new_count += n
+                            updated_count += u
+                            total_count += len(page_listings)
+                            active_ids.extend(l["source_id"] for l in page_listings)
+                            detail_items.extend((l["source_id"], l["source_url"]) for l in page_listings if l.get("source_url"))
                     except Exception:
                         pass
-
-        active_ids = [l["source_id"] for l in all_listings]
-        new_count, updated_count = upsert_cars(db, all_listings)
 
         is_full_scrape = max_pages is None or pages_to_scrape >= total_pages
         if is_full_scrape:
@@ -332,11 +335,10 @@ def run_scraper(max_pages: Optional[int] = None) -> dict:
 
         logger.info("Scraping detail pages for trait fields...")
 
-        detail_urls = [(l["source_id"], l["source_url"]) for l in all_listings if l.get("source_url")]
         max_detail = int(os.getenv("MAX_DETAIL_PAGES", "0"))
         if max_detail > 0:
-            detail_urls = detail_urls[:max_detail]
-        logger.info(f"Scraping traits from {len(detail_urls)} detail pages")
+            detail_items = detail_items[:max_detail]
+        logger.info(f"Scraping traits from {len(detail_items)} detail pages")
 
         detail_count = 0
         failed = 0
@@ -346,8 +348,8 @@ def run_scraper(max_pages: Optional[int] = None) -> dict:
             traits = scrape_traits_from_detail(url)
             return source_id, traits
 
-        with ThreadPoolExecutor(max_workers=10) as pool:
-            futures = {pool.submit(fetch_detail, item): item for item in detail_urls}
+        with ThreadPoolExecutor(max_workers=5) as pool:
+            futures = {pool.submit(fetch_detail, item): item for item in detail_items}
             for i, future in enumerate(as_completed(futures), 1):
                 try:
                     source_id, traits = future.result()
@@ -359,7 +361,8 @@ def run_scraper(max_pages: Optional[int] = None) -> dict:
                                     setattr(car, key, value)
                             detail_count += 1
                     if i % 20 == 0:
-                        logger.info(f"  Detail progress: {i}/{len(detail_urls)}")
+                        db.commit()
+                        logger.info(f"  Detail progress: {i}/{len(detail_items)}")
                 except Exception as e:
                     failed += 1
                     logger.debug(f"Error scraping detail: {e}")
@@ -368,11 +371,11 @@ def run_scraper(max_pages: Optional[int] = None) -> dict:
             db.commit()
 
         logger.info(
-            f"Scrape complete: {len(all_listings)} total, {new_count} new, "
+            f"Scrape complete: {total_count} total, {new_count} new, "
             f"{updated_count} updated, {detail_count} details scraped, {failed} failed"
         )
         return {
-            "total": len(all_listings),
+            "total": total_count,
             "new": new_count,
             "updated": updated_count,
             "pages_scraped": pages_to_scrape,
