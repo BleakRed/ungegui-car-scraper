@@ -207,7 +207,7 @@ def get_similar_cars(
 
 
 @router.post("/api/scrape", response_model=ScrapeResponse)
-def trigger_scrape(max_pages: Optional[int] = Query(None, ge=1, le=100)):
+def trigger_scrape(max_pages: Optional[int] = Query(None, ge=1, description="Omit for a full scrape of all pages")):
     if not _scrape_lock.acquire(blocking=False):
         raise HTTPException(status_code=409, detail="Scrape already in progress")
     try:

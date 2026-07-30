@@ -23,7 +23,12 @@ async def lifespan(app: FastAPI):
     Base.metadata.create_all(bind=engine)
 
     if os.getenv("AUTO_SCRAPE", "true").lower() == "true":
-        logger.info("Initial scrape skipped on startup — scheduler will populate DB")
+        try:
+            from .scraper import run_scraper
+            logger.info("Running quick initial scrape (2 pages)...")
+            run_scraper(max_pages=2)
+        except Exception as e:
+            logger.error(f"Initial scrape failed: {e}")
 
     start_scheduler()
     yield
